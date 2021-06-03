@@ -59,7 +59,7 @@ class RSAServer(object):
         except OSError as e:
             print(
                 "error: socket.close() exception for",
-                f" {repr(e)}",
+                f" {repr(e)}", 
             )
         finally:
             # Delete reference to socket object
@@ -128,10 +128,21 @@ class RSAServer(object):
         self.generateNonce()
         status = "102 Hello AES, RSA16 " + str(self.modulus) + " " + \
          str(self.pubExponent) + " " + str(self.nonce)
+        print (status)
         return status
 
-  
+   def VCandidates(self):
+       status = '106 Candidates ' + 'Squirrel ' + 'Walrus'
+       return status
 
+    
+    def PollOpen(self):
+        status = '107 Poll Open'
+        return status
+
+    def Error(self):
+        status = '400 Error'
+        return status
 
     def start(self):
         """Main sending and receiving loop"""
@@ -144,7 +155,20 @@ class RSAServer(object):
             print (msg)
             self.send(self.connSocket, self.clientHelloResp())
             msg2 = self.connSocket.recv(1924).decode('utf-8')
-            print(msg2)
+            info = msg2.split(',')
+            print(info)
+            session_key = self.RSAdecrypt(int(info[1]))
+            print(session_key)
+            client_nonce = self.AESdecrypt(int(info[2]))
+            print(client_nonce)
+            if self.nonce == client_nonce:
+               shoot = self.VCandidates() 
+               self.send(shoot)
+            else:
+                woah = self.Error
+                self.send(woah)
+            openp = self.PollOpen()
+            self.send(openp)
             self.close(self.connSocket)
             break
 

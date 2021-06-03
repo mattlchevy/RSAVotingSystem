@@ -86,9 +86,12 @@ class RSAClient:
         return status
 
     def Session_K(self):
-        status = "103 Session Key" + str(self.RSAencrypt(self.computeSessionKey)) + str(self.AESencrypt(self.nonce))
+        status = "103 Session Key, "  + str(self.RSAencrypt(self.sessionKey)) + ', '  + str(self.AESencrypt(self.nonce))
         return status
        
+    def vClient(self):
+        status = '115 ID: ' + 
+    
     def start(self):
         """Main sending and receiving loop for the client"""
         self.socket.connect((self.address, self.port))
@@ -103,9 +106,28 @@ class RSAClient:
         self.modulus = (int(info[1]))
         self.nonce = (int(info[3]))
         print(self.lastRcvdMsg)
-        self.send(str(self.Session_K))
+        self.session_key = self.computeSessionKey()
+        print (self.session_key)
+        self.send(str(self.Session_K()))
         print("103 Session was sent!")
-     
+        resp = self.read()
+        if resp.startswith('400'):
+            self.close()
+        else:
+            candidates = resp.split(' ')
+            cand1 = candidates[1]
+            cand2 = candidates[2]
+            cand1votes = 0
+            cand2votes = 0 
+            print('Our two candidates are: ' + cand1 + 'and ' + cand2)
+        polls = self.read()
+        if polls.startswith('107'):
+            vote1 = str(input('enter your candidate of choice:'))
+            if vote1 == cand1 :
+                cand1votes += 1
+            elif vote1 == cand2:
+                cand2votes += 1
+        
 
 
 def main():
