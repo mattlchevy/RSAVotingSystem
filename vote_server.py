@@ -22,21 +22,48 @@ import NumTheory
 class RSAServer(object):
     
     def __init__(self, port, p, q):
+        # two prime numbers for operation and phi (may operate without)
         self.p = p 
         self.q = q
+        self.phi = (p-1)*(q-1)
+
+        # initialize socket
         self.socket = socket.socket() 
+
         # The option below is to permit reuse of a socket in less than an MSL
         self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+     
+        # initialize any available interface with a specified port
         self.socket.bind(("", int(port)))
+        
+        # listening for incoming connections
         self.socket.listen(5)	
+
+        # variable storing the last stream of bytes recieved
         self.lastRcvdMsg = 0
-        self.sessionKey = 0		#For storing the symmetric key
-        self.modulus = 0 #For storing the server's n in the public/private key
-        self.pubExponent = 0	#For storing the server's e in the public key
-        self.privExponent = 0  #For storing the server's d in the private key
-        self.nonce = None
+
+        #For storing the symmetric key
+        self.sessionKey = 0	
+
+        #For storing the server's n in the public/private key
+        self.modulus = 0 
+
+        #For storing the server's e in the pu n vco[pblic key
+        self.pubExponent = 0	
+
+        #For storing the server's d in the private key
+        self.privExponent = 0 
+        self.nonce = 0
+
         # Call the methods to compute the public private/key pairs
+        self.genKeys(self.p,self.q)  
+
         # Add code to initialize the candidates and their IDs
+        self.candidates = ['Jerry','Terry' ] 
+         # voting talliies
+
+        self.votescan1=0
+        self.votescan2=0
 
     def send(self, conn, message):
         conn.send(bytes(message,'utf-8'))
@@ -101,11 +128,11 @@ class RSAServer(object):
 
 
 #Choose an integer e such that 1 < e < λ(n) and gcd(e, λ(n)) = 1, since lcm(a,b) = |ab|/gcd(a,b).
-    def findE(self, phi):
+    def findE(self):
         """Method to randomly choose a good e given phi"""
         self.pubExponent = random.randint(1,self.modulus-1)
         #while e shares a common factor with phi, generate a random e
-        while(NumTheory.NumTheory.gcd_iter(self.pubExponent,phi) != 1):
+        while(NumTheory.NumTheory.gcd_iter(self.pubExponent,self.phi) != 1):
             self.pubExponent = random.randint(1,self.modulus-1)           
         
 
@@ -116,23 +143,21 @@ class RSAServer(object):
     def genKeys(self, p, q):
         """Generates n, phi(n), e, and d"""
         self.modulus = p*q
-        phi = (p-1)*(q-1)
-        self.findE(phi)
-        self.privExponent = NumTheory.NumTheory.ext_Euclid(phi, self.pubExponent)
+        self.findE()
+        self.privExponent = NumTheory.NumTheory.ext_Euclid(self.phi, self.pubExponent)
           
 
 
 
     def clientHelloResp(self):
         """Generates response string to client's hello message"""
-        self.generateNonce()
+        
         status = "102 Hello AES, RSA16 " + str(self.modulus) + " " + \
          str(self.pubExponent) + " " + str(self.nonce)
-        print (status)
         return status
 
-   def VCandidates(self):
-       status = '106 Candidates ' + 'Squirrel ' + 'Walrus'
+    def VCandidates(self): 
+       status = ['106 '] + [self.candidates[i]+' ' for i in self.candidates ]
        return status
 
     
@@ -148,30 +173,45 @@ class RSAServer(object):
         """Main sending and receiving loop"""
         """You will need to complete this function"""    
         while True:
+
             self.connSocket, self.addr = self.socket.accept()
             print("Connection from %s has been established" % str(self.addr))
-            msg = self.connSocket.recv(1024).decode('utf-8')   
-            self.genKeys(self.p,self.q)         
-            print (msg)
+            self.generateNonce()
+            print('Modulus: ' + str(self.modulus))
+            print('Phi ' + str(self.phi))
+            print('D: ' + str(self.privExponent))
+            print('E: ' + str(self.pubExponent))
+            print('Nonce: ' + str(self.nonce))
+            msg = self.connSocket.recv(1024).decode('utf-8')          
+            print ('Client Hello: '+ msg)
             self.send(self.connSocket, self.clientHelloResp())
             msg2 = self.connSocket.recv(1924).decode('utf-8')
             info = msg2.split(',')
             print(info)
             session_key = self.RSAdecrypt(int(info[1]))
-            print(session_key)
-            client_nonce = self.AESdecrypt(int(info[2]))
-            print(client_nonce)
+            print('RSA Decrypted session key: ' + str(session_key))
+            client_nonce = self.RSAdecrypt(int(info[2]))
+            print('AES Decrypted Nonce:' + str(client_nonce))
             if self.nonce == client_nonce:
-               shoot = self.VCandidates() 
-               self.send(shoot)
+                self.send(self.connSocket, self.VCandidates())
+                self.send(self.connSocket, self.PollOpen())
+                vote = self.connSocket.recv(2048).decode('utf-8')
+                if vote == self.candidate[0]:
+                    self.votescan1 += 1
+                elif vote == self.candidates[1]:
+                    self.votescan2 += 1
+                
+                if self.votescan1 >= self.votescan2:
+
             else:
-                woah = self.Error
-                self.send(woah)
-            openp = self.PollOpen()
-            self.send(openp)
-            self.close(self.connSocket)
+                self.send(self.connSocket, self.Error())
+                self.close(self.connSocket)
             break
 
+def is_prime(n):
+    if n % 2 == 0 and n > 2: 
+        return False
+    return all(n % i for i in range(3, int(math.sqrt(n)) + 1, 2))
 
 
 
@@ -191,11 +231,11 @@ def main():
  the other between 229 and 307")
     p = int(input('Enter P: '))
     q = int(input('Enter Q: '))
-
-
-    server = RSAServer(PORT, p, q)
-    server.start()
-
+    if is_prime(p) and is_prime(q):   
+        server = RSAServer(PORT, p, q)
+        server.start()
+    else:
+        print("please ensure p and q are bth prime...")
 
 if __name__ == "__main__":
     main()

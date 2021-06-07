@@ -22,13 +22,22 @@ import NumTheory
 
 class RSAClient:
     def __init__(self, address, port):
+        # client socket components 
         self.address = address
         self.port = int(port)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        self.lastRcvdMsg = None
-        self.sessionKey = None		#For storing the symmetric key
-        self.modulus = None		#For storing the server's n in the public key
-        self.serverExponent = None	#For storing the server's e in the public key
+        
+        #variable storing the latest data recieved
+        self.lastRcvdMsg = 0
+
+        #For storing the symmetric key
+        self.sessionKey = 0	
+
+        #For storing the server's n in the public key
+        self.modulus = 0	
+        self.nonce = 0
+        #For storing the server's e in the public key
+        self.serverExponent = 0 	
 
     def send(self, message):
         self.socket.send(bytes(message,'utf-8'))
@@ -86,49 +95,50 @@ class RSAClient:
         return status
 
     def Session_K(self):
-        status = "103 Session Key, "  + str(self.RSAencrypt(self.sessionKey)) + ', '  + str(self.AESencrypt(self.nonce))
+        self.EncryptedNonce = self.RSAencrypt(self.nonce)
+        status = "103 Session Key, "  + str(self.RSAencrypt(self.sessionKey)) + ', '  + str(self.EncryptedNonce)
         return status
-       
-    def vClient(self):
-        status = '115 ID: ' + 
-    
+   
+    def Vote115(self):
+        status = ''
+
     def start(self):
         """Main sending and receiving loop for the client"""
         self.socket.connect((self.address, self.port))
         self.send(self.serverHello())
         print("101 Hello sent")
         self.read()
+        # 102 Hello AES, RSA16, n, e, nonce
         msg = self.lastRcvdMsg.split('6',1)
         info = msg[1].split(' ')
         print(info)
-
-        self.serverExponent = (int(info[2]))
+        self.lastRcvdMsg = 0
+        # storing values globally for encryption
         self.modulus = (int(info[1]))
+        self.serverExponent = (int(info[2]))
         self.nonce = (int(info[3]))
-        print(self.lastRcvdMsg)
-        self.session_key = self.computeSessionKey()
-        print (self.session_key)
+        
+        self.computeSessionKey()
+        print('The Generated Nonce is: ' + str(self.nonce))
+        print ('The Generated Session Key is ' + str(self.sessionKey))
         self.send(str(self.Session_K()))
         print("103 Session was sent!")
         resp = self.read()
         if resp.startswith('400'):
             self.close()
-        else:
-            candidates = resp.split(' ')
-            cand1 = candidates[1]
-            cand2 = candidates[2]
-            cand1votes = 0
-            cand2votes = 0 
-            print('Our two candidates are: ' + cand1 + 'and ' + cand2)
+        elif resp.startswith('106'):
+            candidates= resp.split(' ',1)
+        print('The candidates are: ' + candidates)
+        self.lastRcvdMsg = 0 
         polls = self.read()
         if polls.startswith('107'):
-            vote1 = str(input('enter your candidate of choice:'))
-            if vote1 == cand1 :
-                cand1votes += 1
-            elif vote1 == cand2:
-                cand2votes += 1
+                vote = str(input('enter the name  of candidate of your choice: '))
+                while vote is not candidates:
+                    print('Please enter a real candidate')
+        self.send(vote)
+        self.lastRcvdMsg = 0
+        winner = 
         
-
 
 def main():
     """Driver function for the project"""
