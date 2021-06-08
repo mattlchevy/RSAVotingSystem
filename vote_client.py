@@ -41,6 +41,9 @@ class RSAClient:
         self.nonce = 0
         #For storing the server's e in the public key
         self.serverExponent = 0 	
+        
+        # for storing candidate info
+        self.candidates = None
 
     def send(self, message):
         self.socket.send(bytes(message,'utf-8'))
@@ -111,38 +114,30 @@ class RSAClient:
 
     def start(self):
         """Main sending and receiving loop for the client"""
-        self.socket.connect((self.address, self.port))
-        self.send(self.serverHello())
-        print("101 Hello sent")
-        self.read()
-        # 102 Hello AES, RSA16, n, e, nonce
-        msg = self.lastRcvdMsg.split('6',1)
-        info = msg[1].split(' ')
-        print(info)
-        self.lastRcvdMsg = 0
-        # storing values globally for encryption
-        self.modulus = (int(info[1]))
-        self.serverExponent = (int(info[2]))
-        self.nonce = (int(info[3]))
+        while True:
+            self.socket.connect((self.address, self.port))
+            self.send(self.serverHello())
+            print("101 Hello sent")
+            self.read()
+            # 102 Hello AES, RSA16, n, e, nonce
+            msg = self.lastRcvdMsg.split('6',1)
+            info = msg[1].split(' ')
+            print(info)
+            self.lastRcvdMsg = 0
+            # storing values globally for encryption
+            self.modulus = (int(info[1]))
+            self.serverExponent = (int(info[2]))
+            self.nonce = (int(info[3]))
+            
+            print('The Generated Nonce is: ' + str(self.nonce))
+            print ('The Generated Session Key is ' + str(self.sessionKey))
+            self.send(str(self.Session_K()))
+            print("103 Session was sent!")
+            if self.lastRcvdMsg[0:2] == '106':
+                self.candidates = self.lastRcvdMsg.split('6')
+                print(self.candidates)
+        # self.send(self.Vote115())
         
-        self.send(str(self.Session_K()))
-        print('The Generated Nonce is: ' + str(self.nonce))
-        print ('The Generated Session Key is ' + str(self.sessionKey))
-        print("103 Session was sent!")
-        resp = self.read()
-        if resp.startswith('400'):
-            self.close()
-        else:
-            candidates= resp
-        print('The candidates are: ' + candidates)
-        self.lastRcvdMsg = 0 
-        polls = self.read()
-        if polls.startswith('107'):
-            vote = str(input('enter the name  of candidate of your choice: '))
-            while vote is not candidates:
-                print('Please enter a real candidate')
-        self.send(self.Vote115())
-        self.lastRcvdMsg = 0
         
         
 

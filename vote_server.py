@@ -59,13 +59,10 @@ class RSAServer(object):
         self.genKeys(self.p,self.q)  
 
         # Add code to initialize the candidates and their IDs
-        can1 = str(input())
-        self.candidates = ['Jerry','Terry' ] 
-         # voting talliies
-
-        self.votescan1=0
-        self.votescan2=0
-
+        print("What are the first names of the candidates?")
+        self.can1 = str(input("The First Candidates name will be:  "))   
+        self.can2 = str(input("The Second Candidates name will be: "))
+        self.candidates = [{"Candidate: ": self.can1, "ID: ": 92, 'Votes: ': 0}, {"Candidate: ": self.can2, "ID: ": 37, 'Votes: ': 0}]
         self.winner = None
 
     def send(self, conn, message):
@@ -154,13 +151,14 @@ class RSAServer(object):
 
     def clientHelloResp(self):
         """Generates response string to client's hello message"""
-        
+        self.generateNonce()        
         status = "102 Hello AES, RSA16 " + str(self.modulus) + " " + \
          str(self.pubExponent) + " " + str(self.nonce)
         return status
 
     def VCandidates(self): 
-       status =  [self.candidates[i] for i in self.candidates ]
+       status = '106[{Candidate: '  + str(self.candidates[0]['Candidate: ']) + ' ID: '+ str(self.candidates[0]['ID: '])+' }, {Candidates: ' + \
+                 str(self.candidates[1]['Candidate: ']) + ' ID: '+ str(self.candidates[1]['ID: '])+' }]'
        return status
 
     
@@ -183,7 +181,7 @@ class RSAServer(object):
 
             self.connSocket, self.addr = self.socket.accept()
             print("Connection from %s has been established" % str(self.addr))
-            self.generateNonce()
+            self.send(self.connSocket, self.clientHelloResp())
             print('Modulus: ' + str(self.modulus))
             print('Phi ' + str(self.phi))
             print('D: ' + str(self.privExponent))
@@ -191,31 +189,25 @@ class RSAServer(object):
             print('Nonce: ' + str(self.nonce))
             msg = self.connSocket.recv(1024).decode('utf-8')          
             print ('Client Hello: '+ msg)
-            self.send(self.connSocket, self.clientHelloResp())
+            
             msg2 = self.connSocket.recv(1924).decode('utf-8')
             info = msg2.split(',')
             print(info)
             self.sessionKey = self.RSAdecrypt(int(info[1]))
             print('RSA Decrypted session key: ' + str(self.sessionKey))
             client_nonce = self.AESdecrypt(int(info[2]))
-            print(' Decrypted Nonce: ' + str(client_nonce))
+            print('AES Decrypted Nonce: ' + str(client_nonce))
             if self.nonce == client_nonce:
+                print("Nonce Match, Proceeding Now....")
                 self.send(self.connSocket, self.VCandidates())
                 self.send(self.connSocket, self.PollOpen())
-                encvote = self.connSocket.recv(2048).decode('utf-8')
+            '''  encvote = self.connSocket.recv(2048).decode('utf-8')
                 vote = self.AESdecrypt(encvote)
-                if vote == self.candidate[0]:
-                    self.votescan1 += 1
-                elif vote == self.candidates[1]:
-                    self.votescan2 += 1        
-                if self.votescan1 >= self.votescan2:
-                    self.winner = self.candidates[0]
-                elif self.votescan1 <= self.votescan2:
-                    self.winner = self.candidates[1]
+               # FINISH HERE
             else:
                 self.send(self.connSocket, self.Error())
                 self.close(self.connSocket)
-            break
+            break'''
 
 def is_prime(n):
     if n % 2 == 0 and n > 2: 
