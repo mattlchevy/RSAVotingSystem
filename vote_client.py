@@ -27,6 +27,9 @@ class RSAClient:
         self.port = int(port)
         self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
         
+        self.vote = None
+        self.encvote = None
+
         #variable storing the latest data recieved
         self.lastRcvdMsg = 0
 
@@ -95,12 +98,16 @@ class RSAClient:
         return status
 
     def Session_K(self):
-        self.EncryptedNonce = self.RSAencrypt(self.nonce)
-        status = "103 Session Key, "  + str(self.RSAencrypt(self.sessionKey)) + ', '  + str(self.EncryptedNonce)
+        self.computeSessionKey()
+        self.EncryptedNonce = self.AESencrypt(self.nonce)
+        self.EncryptedKey = self.RSAencrypt(self.sessionKey)
+        status = "103 Session Key, "  + str(self.EncryptedKey) + ', '  + str(self.EncryptedNonce)
         return status
    
     def Vote115(self):
-        status = ''
+        self.encvote = self.AESencrypt(self.vote)
+        status = '115 ' + str(self.encvote)
+        return status
 
     def start(self):
         """Main sending and receiving loop for the client"""
@@ -118,26 +125,25 @@ class RSAClient:
         self.serverExponent = (int(info[2]))
         self.nonce = (int(info[3]))
         
-        self.computeSessionKey()
+        self.send(str(self.Session_K()))
         print('The Generated Nonce is: ' + str(self.nonce))
         print ('The Generated Session Key is ' + str(self.sessionKey))
-        self.send(str(self.Session_K()))
         print("103 Session was sent!")
         resp = self.read()
         if resp.startswith('400'):
             self.close()
-        elif resp.startswith('106'):
-            candidates= resp.split(' ',1)
+        else:
+            candidates= resp
         print('The candidates are: ' + candidates)
         self.lastRcvdMsg = 0 
         polls = self.read()
         if polls.startswith('107'):
-                vote = str(input('enter the name  of candidate of your choice: '))
-                while vote is not candidates:
-                    print('Please enter a real candidate')
-        self.send(vote)
+            vote = str(input('enter the name  of candidate of your choice: '))
+            while vote is not candidates:
+                print('Please enter a real candidate')
+        self.send(self.Vote115())
         self.lastRcvdMsg = 0
-        winner = 
+        
         
 
 def main():

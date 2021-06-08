@@ -59,11 +59,14 @@ class RSAServer(object):
         self.genKeys(self.p,self.q)  
 
         # Add code to initialize the candidates and their IDs
+        can1 = str(input())
         self.candidates = ['Jerry','Terry' ] 
          # voting talliies
 
         self.votescan1=0
         self.votescan2=0
+
+        self.winner = None
 
     def send(self, conn, message):
         conn.send(bytes(message,'utf-8'))
@@ -157,7 +160,7 @@ class RSAServer(object):
         return status
 
     def VCandidates(self): 
-       status = ['106 '] + [self.candidates[i]+' ' for i in self.candidates ]
+       status =  [self.candidates[i] for i in self.candidates ]
        return status
 
     
@@ -167,6 +170,10 @@ class RSAServer(object):
 
     def Error(self):
         status = '400 Error'
+        return status
+
+    def WinnerMsg(self):
+        status = '220 ' + str(self.winner)
         return status
 
     def start(self):
@@ -188,21 +195,23 @@ class RSAServer(object):
             msg2 = self.connSocket.recv(1924).decode('utf-8')
             info = msg2.split(',')
             print(info)
-            session_key = self.RSAdecrypt(int(info[1]))
-            print('RSA Decrypted session key: ' + str(session_key))
-            client_nonce = self.RSAdecrypt(int(info[2]))
-            print('AES Decrypted Nonce:' + str(client_nonce))
+            self.sessionKey = self.RSAdecrypt(int(info[1]))
+            print('RSA Decrypted session key: ' + str(self.sessionKey))
+            client_nonce = self.AESdecrypt(int(info[2]))
+            print(' Decrypted Nonce: ' + str(client_nonce))
             if self.nonce == client_nonce:
                 self.send(self.connSocket, self.VCandidates())
                 self.send(self.connSocket, self.PollOpen())
-                vote = self.connSocket.recv(2048).decode('utf-8')
+                encvote = self.connSocket.recv(2048).decode('utf-8')
+                vote = self.AESdecrypt(encvote)
                 if vote == self.candidate[0]:
                     self.votescan1 += 1
                 elif vote == self.candidates[1]:
-                    self.votescan2 += 1
-                
+                    self.votescan2 += 1        
                 if self.votescan1 >= self.votescan2:
-
+                    self.winner = self.candidates[0]
+                elif self.votescan1 <= self.votescan2:
+                    self.winner = self.candidates[1]
             else:
                 self.send(self.connSocket, self.Error())
                 self.close(self.connSocket)
