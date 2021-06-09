@@ -14,6 +14,8 @@ import random
 import sys
 import simplified_AES
 import NumTheory
+import json
+
 
 # Author: 
 # Last modified: 2020-11-13
@@ -44,6 +46,13 @@ class RSAClient:
         
         # for storing candidate info
         self.candidates = None
+
+        self.can1 = 0
+        self.can2 = 0
+
+        self.can1V = 0
+        self.can2V = 0
+
 
     def send(self, message):
         self.socket.send(bytes(message,'utf-8'))
@@ -81,8 +90,8 @@ class RSAClient:
         """Decryption side of RSA"""
         """"This function will return (cText^exponent mod modulus) and you must"""
         """ use the expMod() function"""
-        msg = NumTheory.NumTheory.expMod(cText, self.serverExponent, self.modulus)
-        return msg
+        ptext = NumTheory.NumTheory.expMod(cText, self.serverExponent, self.modulus)
+        return ptext
 
 
     def computeSessionKey(self):
@@ -104,40 +113,66 @@ class RSAClient:
         self.computeSessionKey()
         self.EncryptedNonce = self.AESencrypt(self.nonce)
         self.EncryptedKey = self.RSAencrypt(self.sessionKey)
-        status = "103 Session Key, "  + str(self.EncryptedKey) + ', '  + str(self.EncryptedNonce)
-        return status
+        msg = "103 Session Key,"  + str(self.EncryptedKey) + ','  + str(self.EncryptedNonce)
+        return msg
    
     def Vote115(self):
-        self.encvote = self.AESencrypt(self.vote)
+        self.envote = [{"ID": self.can1["ID"], "Votes": self.AESencrypt(self.can1V)}, {"ID": self.can2["ID"], "Votes": self.AESencrypt(self.can2V)}]
         status = '115 ' + str(self.encvote)
         return status
 
     def start(self):
         """Main sending and receiving loop for the client"""
-        while True:
-            self.socket.connect((self.address, self.port))
-            self.send(self.serverHello())
-            print("101 Hello sent")
-            self.read()
-            # 102 Hello AES, RSA16, n, e, nonce
-            msg = self.lastRcvdMsg.split('6',1)
-            info = msg[1].split(' ')
-            print(info)
-            self.lastRcvdMsg = 0
-            # storing values globally for encryption
-            self.modulus = (int(info[1]))
-            self.serverExponent = (int(info[2]))
-            self.nonce = (int(info[3]))
+        self.socket.connect((self.address, self.port))
+        self.send(self.serverHello())
+        print("101 Hello sent")
+        print("\n")
+        status = 1
+        while status == 1:
             
-            print('The Generated Nonce is: ' + str(self.nonce))
-            print ('The Generated Session Key is ' + str(self.sessionKey))
-            self.send(str(self.Session_K()))
-            print("103 Session was sent!")
-            if self.lastRcvdMsg[0:2] == '106':
-                self.candidates = self.lastRcvdMsg.split('6')
-                print(self.candidates)
-        # self.send(self.Vote115())
+            self.read()
+            if '102' in self.lastRcvdMsg:
+                # 102 Hello AES, RSA16, n, e, nonce
+                print("Recievend from server: " + self.lastRcvdMsg)
         
+                # storing values globally for encryption
+                self.modulus = (int(self.lastRcvdMsg.split(' ')[4]))
+                self.serverExponent = (int(self.lastRcvdMsg.split(' ')[5]))
+                self.nonce = (int(self.lastRcvdMsg.split(' ')[6]))
+
+                self.send(str(self.Session_K()))
+                print("103 Session was sent!")
+                print('The Generated Nonce is: ' + str(self.nonce))
+                print ('The Generated Session Key is ' + str(self.sessionKey))
+                print("\n") 
+
+            if '106' in self.lastRcvdMsg:
+                self.read()
+                self.candidates = json.loads(self.lastRcvdMsg)
+                
+                self.can1 = dict(self.candidates[0])
+                self.can2 = dict(self.candidates[1])
+                print('The list of candidates are: \n')
+                print(str(self.can1)+ "\n")
+                print(str(self.can2))
+            if '107' in self.lastRcvdMsg:
+                print("\n")
+                print(self.lastRcvdMsg[3:])
+                while True:
+                    x=input("press (1) to vote for "+ self.can1["Candidate"]+ " and (2) to vote for "+ self.can2["Candidate"]+"\nIf you wish to stop voting press anything else\n")
+                    if x == '1':
+                        self.can1V += 1
+                    elif x == '2':
+                        self.can2V += 1
+                    else:
+                        break
+
+                msg=self.Vote115()
+                self.send(msg)
+                msg = json.dumps(self.envote)
+                self.send(msg)
+                print("115 sent")
+                
         
         
 

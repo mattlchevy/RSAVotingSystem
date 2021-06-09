@@ -16,6 +16,8 @@ import time
 import sys
 import simplified_AES
 import NumTheory
+import json
+
 
 
 
@@ -64,13 +66,15 @@ class RSAServer(object):
         self.can2 = str(input("The Second Candidates name will be: "))
         self.candidates = [{"Candidate: ": self.can1, "ID: ": 92, 'Votes: ': 0}, {"Candidate: ": self.can2, "ID: ": 37, 'Votes: ': 0}]
         self.winner = None
+        #Indicate when to attemp client connection
+        print("Now listening for client...") 
 
     def send(self, conn, message):
         conn.send(bytes(message,'utf-8'))
 
-    def read(self):
+    def read(self, conn):
         try:
-            data = self.socket.recv(4096).decode('utf-8')
+            data = conn.recv(4096).decode('utf-8')
         except BlockingIOError:
             pass
         else:
@@ -104,8 +108,8 @@ class RSAServer(object):
         """Decryption side of RSA"""
         """"This function will return (cText^exponent mod modulus) and you must"""
         """ use the expMod() function"""
-        msg = NumTheory.NumTheory.expMod(cText, self.privExponent, self.modulus)
-        return msg
+        ptext = NumTheory.NumTheory.expMod(cText, self.privExponent, self.modulus)
+        return ptext
         
 
     def AESdecrypt(self, cText):
@@ -156,9 +160,14 @@ class RSAServer(object):
          str(self.pubExponent) + " " + str(self.nonce)
         return status
 
+    def nonceVerification(self, recievedNonce):
+        """Verifies that the transmitted nonce matches that received
+        from the client."""
+        return self.nonce == recievedNonce
+
     def VCandidates(self): 
-       status = '106[{Candidate: '  + str(self.candidates[0]['Candidate: ']) + ' ID: '+ str(self.candidates[0]['ID: '])+' }, {Candidates: ' + \
-                 str(self.candidates[1]['Candidate: ']) + ' ID: '+ str(self.candidates[1]['ID: '])+' }]'
+       status = '106[{Candidate: '  + str(self.candidates[0]['Candidate: ']) + ', ID: '+ str(self.candidates[0]['ID: '])+' }, {Candidates: ' + \
+                 str(self.candidates[1]['Candidate: ']) + ', ID: '+ str(self.candidates[1]['ID: '])+' }]'
        return status
 
     
@@ -177,30 +186,54 @@ class RSAServer(object):
     def start(self):
         """Main sending and receiving loop"""
         """You will need to complete this function"""    
-        while True:
-
-            self.connSocket, self.addr = self.socket.accept()
-            print("Connection from %s has been established" % str(self.addr))
-            self.send(self.connSocket, self.clientHelloResp())
-            print('Modulus: ' + str(self.modulus))
-            print('Phi ' + str(self.phi))
-            print('D: ' + str(self.privExponent))
-            print('E: ' + str(self.pubExponent))
-            print('Nonce: ' + str(self.nonce))
-            msg = self.connSocket.recv(1024).decode('utf-8')          
-            print ('Client Hello: '+ msg)
+        self.connSocket, self.addr = self.socket.accept()
+        print("Connection from %s has been established" % str(self.addr))
+        status = 1
+        while status == 1:
             
-            msg2 = self.connSocket.recv(1924).decode('utf-8')
-            info = msg2.split(',')
-            print(info)
-            self.sessionKey = self.RSAdecrypt(int(info[1]))
-            print('RSA Decrypted session key: ' + str(self.sessionKey))
-            client_nonce = self.AESdecrypt(int(info[2]))
-            print('AES Decrypted Nonce: ' + str(client_nonce))
-            if self.nonce == client_nonce:
-                print("Nonce Match, Proceeding Now....")
-                self.send(self.connSocket, self.VCandidates())
-                self.send(self.connSocket, self.PollOpen())
+            self.read(self.connSocket)
+            if "101" in self.lastRcvdMsg:
+                print ("Recievend from client: "+ self.lastRcvdMsg)
+
+                self.send(self.connSocket, self.clientHelloResp())
+                print('Modulus: ' + str(self.modulus))
+                print('Phi ' + str(self.phi))
+                print('D: ' + str(self.privExponent))
+                print('E: ' + str(self.pubExponent))
+                print('Nonce: ' + str(self.nonce))
+                print("\n")
+
+            
+            #self.read(self.connSocket)
+            if "103" in self.lastRcvdMsg:
+                print ("Received from client: "+ self.lastRcvdMsg)
+                print("\n")
+                
+        
+                self.sessionKey = self.RSAdecrypt(int(self.lastRcvdMsg.split(',')[1]))
+                print('RSA Decrypted session key: ' + str(self.sessionKey))
+                client_nonce = self.AESdecrypt(int(self.lastRcvdMsg.split(',')[2]))
+                print('AES Decrypted Nonce: ' + str(client_nonce))
+                
+                if str(self.nonce) == str(client_nonce):
+                    print("Nonce Match, Proceeding Now....")
+                    self.send(self.connSocket, self.VCandidates())
+                    msg = [{"Candidate": str(self.candidates[0]['Candidate: ']) , "ID": str(self.candidates[0]['ID: '])  }, {"Candidate": \
+                            str(self.candidates[1]['Candidate: ']), "ID": str(self.candidates[1]['ID: '])}]
+                    tosend = json.dumps(msg)
+                    self.send(self.connSocket, tosend )
+                    self.send(self.connSocket, self.PollOpen())
+                else:
+                    self.send(self.connSocket, "400 Error")
+                    self.close(self.connSocket)
+            
+            if "115" in self.lastRcvdMsg:
+                self.read(self.connSocket)
+                msg = json.loads(self.lastRcvdMsg)
+                print('The total amount of votes for the first candidate is: ' +str(self.AESdecrypt(msg[0]["Votes"])))
+                print('The total amount of votes for the second candidate is:' +str(self.AESdecrypt(msg[1]["Votes"])))
+                print(msg)
+
             '''  encvote = self.connSocket.recv(2048).decode('utf-8')
                 vote = self.AESdecrypt(encvote)
                # FINISH HERE
@@ -232,7 +265,8 @@ def main():
  the other between 229 and 307")
     p = int(input('Enter P: '))
     q = int(input('Enter Q: '))
-    if is_prime(p) and is_prime(q):   
+    print("Now listening for client...")
+    if is_prime(p) and is_prime(q):  
         server = RSAServer(PORT, p, q)
         server.start()
     else:
