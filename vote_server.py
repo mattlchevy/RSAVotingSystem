@@ -265,12 +265,14 @@ def main():
  the other between 229 and 307")
     p = int(input('Enter P: '))
     q = int(input('Enter Q: '))
-    print("Now listening for client...")
-    if is_prime(p) and is_prime(q):  
-        server = RSAServer(PORT, p, q)
-        server.start()
+    if (211 < p < 281) and (229 < q < 307):
+        print("Now listening for client...")
+        if is_prime(p) and is_prime(q):  
+            server = RSAServer(PORT, p, q)
+            server.start()
+        else:
+            print("please ensure p and q are bth prime...")
     else:
-        print("please ensure p and q are bth prime...")
-
+        print('Please ensure your numbers fit the criteria...')
 if __name__ == "__main__":
     main()
